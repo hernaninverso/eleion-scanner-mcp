@@ -1,0 +1,26 @@
+{
+  "manifest_version": "0.3",
+  "name": "eleion-scanner-mcp",
+  "version": "0.1.1",
+  "description": "Eleion security scanner for AI agents: register/verify domains, queue scans, read findings.",
+  "author": { "name": "eleata", "url": "https://eleion.io" },
+  "homepage": "https://eleion.io",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": { "SCANNER_API_KEY": "${user_config.api_key}" }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Eleion Scanner tenant API Key",
+      "description": "Tenant API key from https://scan.eleion.io (you can only scan domains you own)",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}
