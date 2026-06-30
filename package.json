@@ -1,7 +1,7 @@
 {
   "name": "eleion-scanner-mcp",
   "mcpName": "io.github.hernaninverso/eleion-scanner-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for the Eleion security scanner: register and verify your domains, queue security scans, and read the findings — for AI agents.",
   "type": "module",
   "bin": { "eleion-scanner-mcp": "dist/index.js" },

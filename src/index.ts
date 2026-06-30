@@ -27,6 +27,19 @@ const USER_AGENT = "eleion-scanner-mcp/0.1.0";
 const TIMEOUT_MS = 25_000;
 const PROFILES = ["basic", "full", "deep"];
 
+// strict runtime arg validation (avoid Number()/String() coercion of null/objects)
+function reqStr(v: unknown, max = 2048): string | null {
+  return typeof v === "string" && v.trim().length > 0 && v.length <= max ? v.trim() : null;
+}
+function reqPosInt(v: unknown): number | null {
+  if (typeof v === "number" && Number.isSafeInteger(v) && v > 0) return v;
+  if (typeof v === "string" && /^[0-9]{1,15}$/.test(v)) {
+    const n = Number(v);
+    if (Number.isSafeInteger(n) && n > 0) return n;
+  }
+  return null;
+}
+
 function needKey(): string | null {
   if (API_KEY) return null;
   return "No API key configured. Set SCANNER_API_KEY (a tenant key from https://scan.eleion.io). You can only scan domains you have registered and verified.";
@@ -51,15 +64,16 @@ async function apiCall(method: string, path: string, body?: unknown): Promise<st
     return `Could not reach the scanner API at ${API_BASE}.`;
   }
   const text = await res.text();
+  // Status-specific messages BEFORE attempting JSON (a gateway may return HTML).
+  if (res.status === 401 || res.status === 403) return "Authentication failed: SCANNER_API_KEY is missing, invalid, or lacks the required scope.";
+  if (res.status === 404) return "Not found (the target or scan id does not exist, or is not yours).";
+  if (res.status === 429) return "Rate limit or quota reached. Try again later or check your plan.";
   let data: any;
   try {
     data = JSON.parse(text);
   } catch {
     return `The scanner API returned a non-JSON response (HTTP ${res.status}).`;
   }
-  if (res.status === 401 || res.status === 403) return "Authentication failed: SCANNER_API_KEY is missing, invalid, or lacks the required scope.";
-  if (res.status === 404) return "Not found (the target or scan id does not exist, or is not yours).";
-  if (res.status === 429) return "Rate limit or quota reached. Try again later or check your plan.";
   if (res.status < 200 || res.status >= 300) {
     const msg = data?.error?.message || data?.detail || data?.message || `HTTP ${res.status}`;
     return `Scanner request failed: ${String(msg).slice(0, 300)}`;
@@ -76,7 +90,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      properties: { target_url: { type: "string", description: "The http(s) URL/domain to register (must be a public host you control)." } },
+      properties: { target_url: { type: "string", description: "The http(s) URL/domain to register (must be a public host you control).", maxLength: 2048 } },
       required: ["target_url"],
     },
   },
@@ -86,7 +100,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      properties: { target_id: { type: "integer", description: "The target id returned by scanner_register_target." } },
+      properties: { target_id: { type: "integer", minimum: 1, description: "The target id returned by scanner_register_target." } },
       required: ["target_id"],
     },
   },
@@ -97,7 +111,7 @@ const TOOLS = [
       type: "object",
       additionalProperties: false,
       properties: {
-        target_id: { type: "integer", description: "The verified target id." },
+        target_id: { type: "integer", minimum: 1, description: "The verified target id." },
         scan_profile: { type: "string", enum: PROFILES, default: "basic", description: "Scan depth." },
       },
       required: ["target_id"],
@@ -109,7 +123,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      properties: { scan_id: { type: "string", description: "The scan id." } },
+      properties: { scan_id: { type: "string", description: "The scan id.", maxLength: 128 } },
       required: ["scan_id"],
     },
   },
@@ -119,7 +133,7 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      properties: { scan_id: { type: "string", description: "The scan id." } },
+      properties: { scan_id: { type: "string", description: "The scan id.", maxLength: 128 } },
       required: ["scan_id"],
     },
   },
@@ -133,25 +147,25 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   try {
     let text: string;
     if (name === "scanner_register_target") {
-      const url = String(a.target_url ?? "");
-      text = url ? await apiCall("POST", "/v1/targets", { target_url: url }) : "target_url is required.";
+      const url = reqStr(a.target_url);
+      text = url ? await apiCall("POST", "/v1/targets", { target_url: url }) : "target_url (non-empty string) is required.";
     } else if (name === "scanner_verify_target") {
-      const id = Number(a.target_id);
-      text = Number.isInteger(id) ? await apiCall("POST", `/v1/targets/${id}/verify`) : "target_id (integer) is required.";
+      const id = reqPosInt(a.target_id);
+      text = id ? await apiCall("POST", `/v1/targets/${id}/verify`) : "target_id (positive integer) is required.";
     } else if (name === "scanner_start_scan") {
-      const id = Number(a.target_id);
-      if (!Number.isInteger(id)) text = "target_id (integer) is required.";
+      const id = reqPosInt(a.target_id);
+      if (!id) text = "target_id (positive integer) is required.";
       else {
-        let profile = String(a.scan_profile ?? "basic");
+        let profile = reqStr(a.scan_profile, 16) ?? "basic";
         if (!PROFILES.includes(profile)) profile = "basic";
         text = await apiCall("POST", "/v1/scans", { target_id: id, scan_profile: profile });
       }
     } else if (name === "scanner_get_scan_status") {
-      const id = String(a.scan_id ?? "");
-      text = id ? await apiCall("GET", `/v1/scans/${encodeURIComponent(id)}`) : "scan_id is required.";
+      const id = reqStr(a.scan_id, 128);
+      text = id ? await apiCall("GET", `/v1/scans/${encodeURIComponent(id)}`) : "scan_id (string) is required.";
     } else if (name === "scanner_get_findings") {
-      const id = String(a.scan_id ?? "");
-      text = id ? await apiCall("GET", `/v1/scans/${encodeURIComponent(id)}/findings`) : "scan_id is required.";
+      const id = reqStr(a.scan_id, 128);
+      text = id ? await apiCall("GET", `/v1/scans/${encodeURIComponent(id)}/findings`) : "scan_id (string) is required.";
     } else {
       return { isError: true, content: [{ type: "text", text: `Unknown tool: ${name}` }] };
     }
