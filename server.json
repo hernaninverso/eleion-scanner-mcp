@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hernaninverso/eleion-scanner-mcp",
+  "title": "Eleion Scanner",
+  "description": "Register/verify your domains, queue security scans, and read findings (CVE, severity).",
+  "version": "0.1.0",
+  "repository": { "url": "https://github.com/hernaninverso/eleion-scanner-mcp", "source": "github" },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "eleion-scanner-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "SCANNER_API_KEY", "description": "Tenant API key from https://scan.eleion.io (you can only scan domains you own and have verified)", "isRequired": true, "isSecret": true }
+      ]
+    }
+  ]
+}

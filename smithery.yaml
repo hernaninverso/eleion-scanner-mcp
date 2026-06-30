@@ -1,0 +1,19 @@
+# https://smithery.ai/docs/config#smitheryyaml
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - scannerApiKey
+    properties:
+      scannerApiKey:
+        type: string
+        description: Tenant API key for the Eleion scanner. Injected as SCANNER_API_KEY.
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'eleion-scanner-mcp'],
+      env: { SCANNER_API_KEY: config.scannerApiKey }
+    })
+  exampleConfig:
+    scannerApiKey: your_tenant_api_key
